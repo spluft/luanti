@@ -25,18 +25,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            libsdl2-dev \
-            libglew-dev \
-            libssl-dev \
-            libogg-dev \
-            libvorbis-dev \
-            libcurl4-openssl-dev \
-            zlib1g-dev \
-            libjpeg-dev \
-            libpng-dev
+          sudo apt install -y g++ make libc6-dev cmake libpng-dev libjpeg-dev libgl1-mesa-dev libsqlite3-dev libogg-dev libvorbis-dev libopenal-dev libcurl4-gnutls-dev libfreetype6-dev zlib1g-dev libgmp-dev libjsoncpp-dev libzstd-dev libluajit-5.1-dev gettext libsdl2-dev
 
       - name: Build Luanti for aarch64
         run: |
