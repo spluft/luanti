@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -20,30 +22,28 @@ jobs:
         with:
           platforms: linux/arm64
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            libsdl2-dev \
+            libglew-dev \
+            libssl-dev \
+            libogg-dev \
+            libvorbis-dev \
+            libcurl4-openssl-dev \
+            zlib1g-dev \
+            libjpeg-dev \
+            libpng-dev
 
       - name: Build Luanti for aarch64
         run: |
-          # Создаем временную директорию для сборки
-          mkdir -p build-luanti
-
-          # Клонируем Luanti, если не из репозитория в checkout
-          # git clone --depth 1 https://github.com/luanti/luanti.git build-luanti
-
-          # Переходим в папку сборки
-          cd build-luanti
-
-          # Создаем build директорию
-          mkdir -p build && cd build
-
-          # Запускаем cmake с указанием целевой платформы и установкой
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-
-          # Компилируем с использованием всех доступных ядер
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64
           make -j$(nproc)
-
-          # Копируем скомпилированный бинарник в корневую папку
           cp ./bin/luanti $GITHUB_WORKSPACE/luanti-rpi5-binary
 
       - name: Upload Luanti binary artifact
