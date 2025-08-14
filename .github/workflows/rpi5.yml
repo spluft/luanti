@@ -124,7 +124,7 @@ jobs:
           -DWITH_TURBOJPEG=OFF
         make install
 
-    - name: Build zlib (fixed)
+        - name: Build zlib (verified cross-compile)
       run: |
         cd deps
         wget -4 https://www.zlib.net/zlib-1.3.1.tar.gz
@@ -139,20 +139,29 @@ jobs:
           --static \
           --prefix=$DEPS_INSTALL_DIR
         
-        # Build with cross-compiler
-        make CC="aarch64-linux-gnu-gcc" AR="aarch64-linux-gnu-ar" RANLIB="aarch64-linux-gnu-ranlib" STRIP="aarch64-linux-gnu-strip"
+        # Build with explicit cross-compiler
+        make \
+          CC="aarch64-linux-gnu-gcc" \
+          AR="aarch64-linux-gnu-ar" \
+          RANLIB="aarch64-linux-gnu-ranlib" \
+          STRIP="aarch64-linux-gnu-strip" \
+          CFLAGS="-O3 -fPIC"
         make install
+        
+        # Verify installation
+        ls -l $DEPS_INSTALL_DIR/lib/libz*
+        ls -l $DEPS_INSTALL_DIR/include/z*
 
-    - name: Build libpng (with explicit zlib linking)
+    - name: Build libpng (fixed includes)
       run: |
         cd deps
         wget -4 https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz
         tar xf libpng-1.6.43.tar.gz
         cd libpng-1.6.43
         
-        # Manually specify zlib location
-        export ZLIB_CFLAGS="-I$DEPS_INSTALL_DIR/include"
-        export ZLIB_LIBS="-L$DEPS_INSTALL_DIR/lib -lz"
+        # Set explicit paths
+        export C_INCLUDE_PATH=$DEPS_INSTALL_DIR/include
+        export LIBRARY_PATH=$DEPS_INSTALL_DIR/lib
         
         ./configure \
           --host=aarch64-linux-gnu \
@@ -160,16 +169,15 @@ jobs:
           --enable-static \
           --disable-shared \
           CC="aarch64-linux-gnu-gcc" \
-          CXX="aarch64-linux-gnu-g++" \
           AR="aarch64-linux-gnu-ar" \
           RANLIB="aarch64-linux-gnu-ranlib" \
           STRIP="aarch64-linux-gnu-strip" \
-          CFLAGS="$ZLIB_CFLAGS" \
-          LDFLAGS="$ZLIB_LIBS"
+          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
+          LDFLAGS="-L$DEPS_INSTALL_DIR/lib -lz"
         
         make
         make install
-
+        
     - name: Build IrrlichtMt (with PNG support)
       run: |
         cd deps
