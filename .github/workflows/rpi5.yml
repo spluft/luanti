@@ -24,7 +24,6 @@ jobs:
         apt-get install -y --no-install-recommends \
           ca-certificates \
           g++-aarch64-linux-gnu \
-          cmake \
           git \
           wget \
           build-essential \
@@ -33,7 +32,13 @@ jobs:
           libgl1-mesa-dev \
           libglu1-mesa-dev \
           pkg-config \
-          ninja-build  # Required for OpenAL-Soft build
+          ninja-build \
+          libssl-dev
+        
+        # Install modern CMake
+        wget -O cmake-linux.sh https://github.com/Kitware/CMake/releases/download/v3.27.7/cmake-3.27.7-linux-$(uname -m).sh
+        sh cmake-linux.sh --skip-license --prefix=/usr
+        rm cmake-linux.sh
 
     - name: Checkout Luanti source
       uses: actions/checkout@v3
@@ -55,22 +60,32 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
         set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
         
-        set(CMAKE_C_FLAGS "-static")
-        set(CMAKE_CXX_FLAGS "-static")
+        set(CMAKE_C_FLAGS "-static -std=gnu11")
+        set(CMAKE_CXX_FLAGS "-static -std=gnu++14")
+        
+        # Required for older compilers
+        set(CMAKE_C_STANDARD 11)
+        set(CMAKE_C_STANDARD_REQUIRED ON)
+        set(CMAKE_CXX_STANDARD 14)
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
         EOF
 
     - name: Create directories for dependencies
       run: |
         mkdir -p deps/build deps/install
 
-    # ... (other dependency build steps remain the same) ...
+    # ... other dependency build steps remain the same ...
 
     - name: Build OpenAL-Soft (Fixed)
       run: |
         cd deps
-        git clone --depth 1 https://github.com/kcat/openal-soft.git
+        git clone --depth 1 --branch 1.23.1 https://github.com/kcat/openal-soft.git
         mkdir -p openal-soft/build
         cd openal-soft/build
+        
+        # Patch CMakeLists.txt to remove problematic generator expressions
+        sed -i 's/\$<BUILD_LOCAL_INTERFACE:alsoft::fmt>//g' ../CMakeLists.txt
+        
         cmake .. \
           -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
           -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
@@ -79,22 +94,27 @@ jobs:
           -DALSOFT_EXAMPLES=OFF \
           -DALSOFT_UTILS=OFF \
           -DALSOFT_NO_CONFIG_UTIL=ON \
+          -DALSOFT_INSTALL_CONFIG=OFF \
+          -DALSOFT_REQUIRE_OPENSL=OFF \
+          -DALSOFT_BACKEND_ALSA=OFF \
+          -DALSOFT_BACKEND_PULSEAUDIO=OFF \
+          -DALSOFT_BACKEND_JACK=OFF \
+          -DALSOFT_BACKEND_COREAUDIO=OFF \
+          -DALSOFT_BACKEND_WASAPI=OFF \
+          -DALSOFT_BACKEND_WINMM=OFF \
+          -DALSOFT_BACKEND_PORTAUDIO=OFF \
+          -DALSOFT_BACKEND_DSOUND=OFF \
+          -DALSOFT_BACKEND_SNDIO=OFF \
+          -DALSOFT_BACKEND_OSS=OFF \
+          -DALSOFT_BACKEND_SOLARIS=OFF \
+          -DALSOFT_BACKEND_QSA=OFF \
+          -DALSOFT_BACKEND_OPENSL=OFF \
+          -DCMAKE_POLICY_DEFAULT_CMP0077=NEW \
           -G Ninja
+        
         cmake --build . --target install
 
-    - name: Build IrrlichtMt (Fixed)
-      run: |
-        cd deps
-        git clone --depth 1 --branch mt https://github.com/minetest/irrlicht.git
-        cd irrlicht
-        mkdir build && cd build
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
-          -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
-          -DCMAKE_FIND_ROOT_PATH=$DEPS_INSTALL_DIR \
-          -DBUILD_SHARED_LIBS=OFF \
-          -DIRRLICHT_BUILD_STATIC=ON
-        make install
+    # ... other build steps ...
 
     - name: Build Luanti
       run: |
@@ -112,7 +132,8 @@ jobs:
           -DVERSION_EXTRA=RPI5-STATIC \
           -DCMAKE_PREFIX_PATH=$DEPS_INSTALL_DIR \
           -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++" \
-          -DCMAKE_INSTALL_PREFIX=./install
+          -DCMAKE_INSTALL_PREFIX=./install \
+          -DCMAKE_BUILD_TYPE=Release
         cmake --build build -j$(nproc) --target install
 
     - name: Upload artifact
