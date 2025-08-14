@@ -1,42 +1,85 @@
-name: Build Luanti for Raspberry Pi 5
+name: Build Statically Linked Luanti for Raspberry Pi 5
 
 on:
   push:
-    branches:
-      - main
+    branches: [ master ]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [ master ]
 
 jobs:
-  build-luanti-rpi5:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-      - name: Set up QEMU for aarch64 emulation
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: linux/arm64
+    - name: Install cross-compilation tools and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          binutils-aarch64-linux-gnu \
+          cmake \
+          make \
+          pkg-config \
+          libbz2-dev:arm64 \
+          libpng-dev:arm64 \
+          libjpeg-dev:arm64 \
+          libsqlite3-dev:arm64 \
+          libogg-dev:arm64 \
+          libvorbis-dev:arm64 \
+          libopenal-dev:arm64 \
+          libcurl4-openssl-dev:arm64 \
+          libfreetype-dev:arm64 \
+          zlib1g-dev:arm64 \
+          libgmp-dev:arm64 \
+          libjsoncpp-dev:arm64 \
+          libluajit-5.1-dev:arm64 \
+          libzstd-dev:arm64 \
+          libgettextpo-dev:arm64 \
+          libgles2-mesa-dev:arm64 \
+          libegl-dev:arm64 \
+          libx11-dev:arm64 \
+          libxxf86vm-dev:arm64 \
+          libxi-dev:arm64 \
+          libncurses-dev:arm64
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt install -y g++ make libc6-dev cmake libpng-dev libjpeg-dev libgl1-mesa-dev libsqlite3-dev libogg-dev libvorbis-dev libopenal-dev libcurl4-gnutls-dev libfreetype6-dev zlib1g-dev libgmp-dev libjsoncpp-dev libzstd-dev libluajit-5.1-dev gettext libsdl2-dev
+    - name: Set up environment for cross-compilation
+      run: |
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+        export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+        export PKG_CONFIG_SYSROOT_DIR=/
 
-      - name: Build Luanti for aarch64
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64
-          make -j$(nproc)
-          cp ./bin/luanti $GITHUB_WORKSPACE/luanti-rpi5-binary
+    - name: Configure CMake with static linking
+      run: |
+        cmake . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_CLIENT=ON \
+          -DBUILD_SERVER=ON \
+          -DRUN_IN_PLACE=FALSE \
+          -DENABLE_GLES=ON \
+          -DENABLE_SOUND=ON \
+          -DENABLE_CURL=ON \
+          -DENABLE_GETTEXT=ON \
+          -DENABLE_FREETYPE=ON \
+          -DUSE_LUAJIT=ON \
+          -DENABLE_LEVELDB=OFF \
+          -DENABLE_POSTGRESQL=OFF \
+          -DENABLE_SPATIAL=OFF \
+          -DENABLE_REDIS=OFF \
+          -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -Wl,-Bdynamic -lpthread -lstdc++ -Wl,-Bstatic"
 
-      - name: Upload Luanti binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: luanti-rpi5-binary
-          path: luanti-rpi5-binary
+    - name: Build
+      run: make -j$(nproc)
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: luanti-rpi5-static
+        path: bin/luanti
