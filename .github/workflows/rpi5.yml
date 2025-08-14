@@ -13,6 +13,11 @@ jobs:
       with:
         submodules: recursive # Luanti requires submodules like IrrlichtMt
 
+    - name: Setup QEMU for arm64 (optional for cross-compilation)
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: linux/arm64
+
     - name: Add arm64 architecture and update repositories
       run: |
         sudo dpkg --add-architecture arm64
@@ -35,7 +40,11 @@ jobs:
           libogg-dev:arm64 \
           libvorbis-dev:arm64 \
           libopenal-dev:arm64 \
-          libcurl4-openssl-dev:arm64 \
+          libcurl4-openssl-dev:arm64
+
+    - name: Install cross-compilation tools and dependencies
+      run: |
+        sudo apt-get install -y \
           libfreetype6-dev:arm64 \
           zlib1g-dev:arm64 \
           libgmp-dev:arm64 \
@@ -108,7 +117,7 @@ jobs:
     - name: Verify binary architecture
       run: |
         file bin/luanti
-        # Should output something like: ELF 64-bit LSB executable, ARM aarch64
+        # Should output: ELF 64-bit LSB executable, ARM aarch64
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
