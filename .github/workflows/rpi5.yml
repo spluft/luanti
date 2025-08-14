@@ -1,4 +1,4 @@
-name: Build Luanti for Raspberry Pi 5 (Static)
+name: Build Luanti for Raspberry Pi 5 (QEMU Emulation)
 
 on:
   push:
@@ -10,421 +10,85 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: debian:bullseye
-
-    env:
-      DEPS_INSTALL_DIR: ${{ github.workspace }}/deps/install
-      SYSROOT_DIR: /rpi-sysroot
-      TOOLCHAIN_FILE: ${{ github.workspace }}/toolchains/aarch64-linux-gnu.cmake
+    timeout-minutes: 120  # Увеличиваем таймаут для эмуляции
 
     steps:
-    - name: Install build dependencies
-      run: |
-        apt-get update
-        apt-get install -y --no-install-recommends \
-          ca-certificates \
-          g++-aarch64-linux-gnu \
-          gcc-aarch64-linux-gnu \
-          binutils-aarch64-linux-gnu \
-          git \
-          wget \
-          build-essential \
-          pkg-config \
-          ninja-build \
-          libssl-dev \
-          qemu-user-static \
-          binfmt-support \
-          autoconf \
-          automake \
-          libtool \
-          m4 \
-          make \
-          cmake \
-          unzip \
-          file
-        
-        # Install modern CMake
-        wget -O cmake-linux.sh https://github.com/Kitware/CMake/releases/download/v3.27.7/cmake-3.27.7-linux-$(uname -m).sh
-        sh cmake-linux.sh --skip-license --prefix=/usr
-        rm cmake-linux.sh
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
 
-    - name: Set up Raspberry Pi OS sysroot
-      run: |
-        # Create sysroot directory
-        mkdir -p $SYSROOT_DIR
-        cd $SYSROOT_DIR
-        
-        # Download Raspberry Pi OS base system
-        wget -4 https://downloads.raspberrypi.org/raspios_lite_arm64/root.tar.xz
-        tar xf root.tar.xz --strip-components=1
-        
-        # Download essential libraries from stable snapshot
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libx11/libx11-6_1.7.2-2%2Bdeb11u1_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libx11/libx11-dev_1.7.2-2%2Bdeb11u1_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxext/libxext-dev_1.3.3-1.1_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxxf86vm/libxxf86vm1_1.1.4-1%2Bb2_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxxf86vm/libxxf86vm-dev_1.1.4-1%2Bb2_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/m/mesa/mesa-common-dev_20.3.5-1_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libg/libglu/libglu1-mesa-dev_9.0.1-1_arm64.deb
-        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libdrm/libdrm-dev_2.4.104-1_arm64.deb
-        
-        # Extract packages
-        for deb in *.deb; do
-          dpkg-deb -x "$deb" .
-        done
-        
-        # Clean up
-        rm *.deb root.tar.xz
-    - name: Create toolchain file
-      run: |
-        mkdir -p toolchains
-        cat > $TOOLCHAIN_FILE <<'EOF'
-        set(CMAKE_SYSTEM_NAME Linux)
-        set(CMAKE_SYSTEM_PROCESSOR aarch64)
-        
-        set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-        set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
-        
-        set(CMAKE_FIND_ROOT_PATH $SYSROOT_DIR $DEPS_INSTALL_DIR)
-        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-        set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-        
-        set(CMAKE_C_FLAGS "-static -std=gnu11")
-        set(CMAKE_CXX_FLAGS "-static -std=gnu++14")
-        
-        set(CMAKE_C_STANDARD 11)
-        set(CMAKE_C_STANDARD_REQUIRED ON)
-        set(CMAKE_CXX_STANDARD 14)
-        set(CMAKE_CXX_STANDARD_REQUIRED ON)
-        
-        # OpenGL paths
-        set(OPENGL_INCLUDE_DIR $SYSROOT_DIR/usr/include)
-        set(OPENGL_gl_LIBRARY $SYSROOT_DIR/usr/lib/aarch64-linux-gnu/libGL.so)
-        set(OPENGL_glu_LIBRARY $SYSROOT_DIR/usr/lib/aarch64-linux-gnu/libGLU.so)
-        set(OPENGL_glx_LIBRARY $SYSROOT_DIR/usr/lib/aarch64-linux-gnu/libGLX.so)
-        EOF
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Checkout Luanti source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: luanti
 
-    - name: Create directories for dependencies
+    - name: Build in ARM64 environment
       run: |
-        mkdir -p deps deps/build deps/install
+        # Создаем Dockerfile для сборки
+        cat > Dockerfile <<EOF
+        FROM arm64v8/ubuntu:22.04
 
-    - name: Build zlib
-      run: |
-        cd deps
-        wget -4 https://www.zlib.net/zlib-1.3.1.tar.gz
-        tar xf zlib-1.3.1.tar.gz
-        cd zlib-1.3.1
-        
-        CHOST=aarch64-linux-gnu ./configure \
-          --static \
-          --prefix=$DEPS_INSTALL_DIR
-        
-        make CC="aarch64-linux-gnu-gcc" AR="aarch64-linux-gnu-ar" RANLIB="aarch64-linux-gnu-ranlib"
-        make install
+        # Установка зависимостей
+        RUN apt-get update && apt-get install -y \\
+            build-essential \\
+            cmake \\
+            git \\
+            ninja-build \\
+            libx11-dev \\
+            libxxf86vm-dev \\
+            libgl1-mesa-dev \\
+            libglu1-mesa-dev \\
+            libopenal-dev \\
+            libvorbis-dev \\
+            libogg-dev \\
+            libfreetype6-dev \\
+            libsqlite3-dev \\
+            libcurl4-openssl-dev \\
+            libjpeg-dev \\
+            libpng-dev \\
+            zlib1g-dev \\
+            liblua5.1-0-dev \\
+            libgmp-dev \\
+            libjson-c-dev \\
+            libzstd-dev \\
+            libssl-dev \\
+            libsdl2-dev
 
-    - name: Build SQLite3
-      run: |
-        cd deps
-        wget -4 https://www.sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
-        tar xf sqlite-autoconf-3430200.tar.gz
-        cd sqlite-autoconf-3430200
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
+        # Копируем исходники Luanti
+        COPY luanti /luanti
 
-    - name: Build LuaJIT
-      run: |
-        cd deps
-        git clone --depth 1 https://luajit.org/git/luajit.git
-        cd luajit
-        
-        make HOST_CC="gcc" \
-          TARGET_CFLAGS="-static" \
-          TARGET_LDFLAGS="-static" \
-          CROSS="aarch64-linux-gnu-" \
-          BUILDMODE="static" \
-          PREFIX=$DEPS_INSTALL_DIR \
-          install
+        WORKDIR /luanti
 
-    - name: Build cURL
-      run: |
-        cd deps
-        wget -4 https://curl.se/download/curl-8.4.0.tar.gz
-        tar xf curl-8.4.0.tar.gz
-        cd curl-8.4.0
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          --with-zlib=$DEPS_INSTALL_DIR \
-          --without-ssl \
-          --disable-ldap \
-          --without-libidn2 \
-          --without-librtmp \
-          --without-libpsl \
-          --without-zstd \
-          --without-brotli \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
+        # Конфигурация и сборка
+        RUN cmake . -B build \\
+            -DENABLE_GETTEXT=OFF \\
+            -DENABLE_LUAJIT=ON \\
+            -DENABLE_SOUND=ON \\
+            -DENABLE_CURL=ON \\
+            -DENABLE_FREETYPE=ON \\
+            -DBUILD_SERVER=OFF \\
+            -DBUILD_CLIENT=ON \\
+            -DVERSION_EXTRA=RPI5-QEMU \\
+            -DCMAKE_BUILD_TYPE=Release
 
-    - name: Build Freetype
-      run: |
-        cd deps
-        wget -4 https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
-        tar xf freetype-2.13.2.tar.gz
-        cd freetype-2.13.2
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          --with-zlib=no \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
+        RUN cmake --build build -j\$(nproc) --target install
+        EOF
 
-    - name: Build libjpeg-turbo (using autoconf)
-      run: |
-        cd deps
-        wget -4 https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.0.2.tar.gz -O libjpeg-turbo-3.0.2.tar.gz
-        tar xf libjpeg-turbo-3.0.2.tar.gz
-        cd libjpeg-turbo-3.0.2
-        
-        autoreconf -fiv
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --prefix=$DEPS_INSTALL_DIR \
-          --disable-shared \
-          --enable-static \
-          --with-jpeg8 \
-          CC="aarch64-linux-gnu-gcc" \
-          CXX="aarch64-linux-gnu-g++" \
-          AR="aarch64-linux-gnu-ar" \
-          RANLIB="aarch64-linux-gnu-ranlib" \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
-
-    - name: Build libpng (with zlib support)
-      run: |
-        cd deps
-        wget -4 https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz
-        tar xf libpng-1.6.43.tar.gz
-        cd libpng-1.6.43
-        
-        # Set explicit paths
-        export C_INCLUDE_PATH=$DEPS_INSTALL_DIR/include
-        export LIBRARY_PATH=$DEPS_INSTALL_DIR/lib
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --prefix=$DEPS_INSTALL_DIR \
-          --enable-static \
-          --disable-shared \
-          CC="aarch64-linux-gnu-gcc" \
-          AR="aarch64-linux-gnu-ar" \
-          RANLIB="aarch64-linux-gnu-ranlib" \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib -lz"
-        
-        make
-        make install
-
-    - name: Build OpenAL-Soft
-      run: |
-        cd deps
-        git clone --depth 1 --branch 1.23.1 https://github.com/kcat/openal-soft.git
-        cd openal-soft
-        
-        # Patch to remove problematic generator expressions
-        sed -i 's/\$<BUILD_LOCAL_INTERFACE:alsoft::fmt>//g' CMakeLists.txt
-        
-        mkdir build
-        cd build
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
-          -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
-          -DLIBTYPE=STATIC \
-          -DALSOFT_EXAMPLES=OFF \
-          -DALSOFT_UTILS=OFF \
-          -DALSOFT_NO_CONFIG_UTIL=ON \
-          -DALSOFT_INSTALL_CONFIG=OFF \
-          -DALSOFT_BACKEND_ALSA=OFF \
-          -DALSOFT_BACKEND_PULSEAUDIO=OFF \
-          -DALSOFT_BACKEND_OSS=OFF \
-          -DCMAKE_POLICY_DEFAULT_CMP0077=NEW \
-          -G Ninja
-        
-        cmake --build . --target install
-
-    - name: Build Ogg
-      run: |
-        cd deps
-        wget -4 https://downloads.xiph.org/releases/ogg/libogg-1.3.5.tar.gz
-        tar xf libogg-1.3.5.tar.gz
-        cd libogg-1.3.5
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
-
-    - name: Build libvorbis
-      run: |
-        cd deps
-        wget -4 https://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.gz
-        tar xf libvorbis-1.3.7.tar.gz
-        cd libvorbis-1.3.7
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          --with-ogg=$DEPS_INSTALL_DIR \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
-
-    - name: Build GMP
-      run: |
-        cd deps
-        wget -4 https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
-        tar xf gmp-6.3.0.tar.xz
-        cd gmp-6.3.0
-        
-        ./configure \
-          --host=aarch64-linux-gnu \
-          --disable-shared \
-          --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-        make
-        make install
-
-    - name: Build json-c
-      run: |
-        cd deps
-        git clone --depth 1 https://github.com/json-c/json-c.git
-        cd json-c
-        mkdir build
-        cd build
-        
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
-          -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
-          -DBUILD_SHARED_LIBS=OFF \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        
-        make install
-
-    - name: Build zstd
-      run: |
-        cd deps
-        wget -4 https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5.tar.gz
-        tar xf zstd-1.5.5.tar.gz
-        cd zstd-1.5.5
-        
-        make -C build/cmake \
-          CROSS_COMPILE="aarch64-linux-gnu-" \
-          BUILD_SHARED=OFF \
-          BUILD_STATIC=ON \
-          ZSTD_BUILD_SHARED=OFF \
-          ZSTD_BUILD_STATIC=ON \
-          CMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
-          CMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE
-        
-        make -C build/cmake install
-
-    - name: Build IrrlichtMt
-      run: |
-        cd deps
-        git clone --depth 1 https://github.com/minetest/irrlicht.git
-        cd irrlicht
-        mkdir build
-        cd build
-        
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
-          -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
-          -DBUILD_SHARED_LIBS=OFF \
-          -DIRRLICHT_BUILD_STATIC=ON \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DZLIB_LIBRARY=$DEPS_INSTALL_DIR/lib/libz.a \
-          -DZLIB_INCLUDE_DIR=$DEPS_INSTALL_DIR/include \
-          -DJPEG_LIBRARY=$DEPS_INSTALL_DIR/lib/libjpeg.a \
-          -DJPEG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include \
-          -DPNG_LIBRARY=$DEPS_INSTALL_DIR/lib/libpng.a \
-          -DPNG_PNG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include
-        
-        make install
-
-    - name: Build Luanti
-      run: |
-        cd luanti
-        cmake . -B build \
-          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
-          -DCMAKE_FIND_ROOT_PATH="$DEPS_INSTALL_DIR;$SYSROOT_DIR" \
-          -DENABLE_GETTEXT=OFF \
-          -DENABLE_LUAJIT=ON \
-          -DENABLE_SOUND=ON \
-          -DENABLE_CURL=ON \
-          -DENABLE_FREETYPE=ON \
-          -DBUILD_SERVER=OFF \
-          -DBUILD_CLIENT=ON \
-          -DVERSION_EXTRA=RPI5-STATIC \
-          -DCMAKE_PREFIX_PATH=$DEPS_INSTALL_DIR \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++ -Wl,--whole-archive -lpthread -Wl,--no-whole-archive" \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DCMAKE_BUILD_TYPE=Release
-        
-        cmake --build build -j$(nproc) --target install
+        # Собираем образ и извлекаем бинарник
+        docker buildx build --platform linux/arm64 -t luanti-builder --output type=local,dest=./output .
 
     - name: Verify executable
       run: |
-        file luanti/install/bin/luanti
-        # Check for dynamic dependencies (should show none)
-        aarch64-linux-gnu-objdump -p luanti/install/bin/luanti | grep NEEDED
+        file output/luanti/install/bin/luanti
+        echo "Dynamic dependencies:"
+        readelf -d output/luanti/install/bin/luanti | grep NEEDED
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: luanti-rpi5-static
-        path: luanti/install/bin/luanti
+        name: luanti-rpi5
+        path: output/luanti/install/bin/luanti
