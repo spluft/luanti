@@ -48,6 +48,35 @@ jobs:
         set(CMAKE_LIBRARY_ARCHITECTURE aarch64-linux-gnu)
         EOF
 
+    - name: Install cross-compilation libraries
+      run: |
+        # Install tools for creating symlinks
+        apt-get install -y symlinks
+        
+        # Create a sysroot directory for cross-compilation
+        mkdir -p /sysroot/usr/lib/aarch64-linux-gnu
+        mkdir -p /sysroot/usr/include
+        
+        # Symlink host libraries to sysroot (this is a workaround)
+        ln -s /usr/include/GL /sysroot/usr/include/GL
+        ln -s /usr/include/X11 /sysroot/usr/include/X11
+        ln -s /usr/include/aarch64-linux-gnu /sysroot/usr/include/aarch64-linux-gnu
+        ln -s /usr/lib/aarch64-linux-gnu /sysroot/usr/lib/aarch64-linux-gnu
+        
+        # For GLES headers if needed
+        ln -s /usr/include/GLES* /sysroot/usr/include/ || true
+
+    - name: Update toolchain file for OpenGL
+      run: |
+        cat >> toolchains/aarch64-linux-gnu.cmake <<'EOF'
+        
+        # OpenGL paths
+        set(OPENGL_INCLUDE_DIR /sysroot/usr/include)
+        set(OPENGL_gl_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGL.so)
+        set(OPENGL_glu_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGLU.so)
+        set(OPENGL_glx_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGLX.so)
+        EOF
+
     - name: Checkout Luanti source
       uses: actions/checkout@v4
       with:
@@ -177,36 +206,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
         make
         make install
-
-    - name: Install cross-compilation libraries
-      run: |
-        # Install tools for creating symlinks
-        apt-get install -y symlinks
         
-        # Create a sysroot directory for cross-compilation
-        mkdir -p /sysroot/usr/lib/aarch64-linux-gnu
-        mkdir -p /sysroot/usr/include
-        
-        # Symlink host libraries to sysroot (this is a workaround)
-        ln -s /usr/include/GL /sysroot/usr/include/GL
-        ln -s /usr/include/X11 /sysroot/usr/include/X11
-        ln -s /usr/include/aarch64-linux-gnu /sysroot/usr/include/aarch64-linux-gnu
-        ln -s /usr/lib/aarch64-linux-gnu /sysroot/usr/lib/aarch64-linux-gnu
-        
-        # For GLES headers if needed
-        ln -s /usr/include/GLES* /sysroot/usr/include/ || true
-
-    - name: Update toolchain file for OpenGL
-      run: |
-        cat >> toolchains/aarch64-linux-gnu.cmake <<'EOF'
-        
-        # OpenGL paths
-        set(OPENGL_INCLUDE_DIR /sysroot/usr/include)
-        set(OPENGL_gl_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGL.so)
-        set(OPENGL_glu_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGLU.so)
-        set(OPENGL_glx_LIBRARY /sysroot/usr/lib/aarch64-linux-gnu/libGLX.so)
-        EOF
-
     - name: Build IrrlichtMt (with OpenGL support)
       run: |
         cd deps
