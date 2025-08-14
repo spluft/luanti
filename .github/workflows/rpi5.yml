@@ -1,10 +1,7 @@
 name: Build Statically Linked Luanti for Raspberry Pi 5
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
 
 jobs:
   build:
@@ -14,7 +11,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        submodules: recursive
+        submodules: recursive # Luanti requires submodules for dependencies like IrrlichtMt
 
     - name: Install cross-compilation tools and dependencies
       run: |
@@ -72,8 +69,9 @@ jobs:
           -DENABLE_POSTGRESQL=OFF \
           -DENABLE_SPATIAL=OFF \
           -DENABLE_REDIS=OFF \
-          -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
-          -DCMAKE_EXE_LINKER_FLAGS="-static -Wl,-Bdynamic -lpthread -lstdc++ -Wl,-Bstatic"
+          -DCMAKE_C_FLAGS="-static" \
+          -DCMAKE_CXX_FLAGS="-static" \
+          -DCMAKE_EXE_LINKER_FLAGS="-static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive"
 
     - name: Build
       run: make -j$(nproc)
