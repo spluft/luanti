@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: debian:buste r
+      image: debian:buster
 
     steps:
     - name: Install build dependencies
@@ -179,7 +179,7 @@ jobs:
         cmake --build build -j$(nproc)
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: luanti-rpi5-static
         path: luanti/build/bin/luanti
