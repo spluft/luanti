@@ -11,7 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      # ИЗМЕНЕНИЕ: Используем Debian Bullseye, так как Buster перенесен в архив.
       image: debian:bullseye
 
     steps:
@@ -19,6 +18,7 @@ jobs:
       run: |
         apt-get update
         apt-get install -y --no-install-recommends \
+          ca-certificates \
           g++-aarch64-linux-gnu \
           cmake \
           git \
