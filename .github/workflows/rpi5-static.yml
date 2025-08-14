@@ -1,0 +1,154 @@
+name: Build Luanti for Raspberry Pi 5 (Static with QEMU)
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90  # Увеличиваем таймаут для статической сборки
+
+    steps:
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Checkout Luanti source
+      uses: actions/checkout@v4
+      with:
+        path: luanti
+
+    - name: Build static Luanti in ARM64 environment
+      run: |
+        # Создаем Dockerfile для статической сборки
+        cat > Dockerfile <<EOF
+        FROM arm64v8/ubuntu:22.04
+
+        # Установка системных зависимостей
+        RUN apt-get update && apt-get install -y \\
+            build-essential \\
+            cmake \\
+            git \\
+            ninja-build \\
+            wget \\
+            autoconf \\
+            automake \\
+            libtool \\
+            pkg-config \\
+            libx11-dev \\
+            libxxf86vm-dev \\
+            libgl1-mesa-dev \\
+            libglu1-mesa-dev \\
+            libsdl2-dev
+
+        # Создание директории для сборки
+        WORKDIR /build
+
+        # Копируем исходники Luanti
+        COPY luanti /build/luanti
+
+        # Собираем все зависимости статически
+        RUN mkdir deps && cd deps && \\
+            # Zlib
+            wget https://www.zlib.net/zlib-1.3.1.tar.gz && \\
+            tar xf zlib-1.3.1.tar.gz && cd zlib-1.3.1 && \\
+            ./configure --static && make -j\$(nproc) && make install && cd .. && \\
+            # SQLite
+            wget https://www.sqlite.org/2023/sqlite-autoconf-3430200.tar.gz && \\
+            tar xf sqlite-autoconf-3430200.tar.gz && cd sqlite-autoconf-3430200 && \\
+            ./configure --disable-shared --enable-static && make -j\$(nproc) && make install && cd .. && \\
+            # LuaJIT
+            git clone https://luajit.org/git/luajit.git && cd luajit && \\
+            make HOST_CC="gcc" TARGET_CFLAGS="-static" TARGET_LDFLAGS="-static" BUILDMODE="static" && \\
+            make install && cd .. && \\
+            # cURL
+            wget https://curl.se/download/curl-8.4.0.tar.gz && \\
+            tar xf curl-8.4.0.tar.gz && cd curl-8.4.0 && \\
+            ./configure --disable-shared --enable-static --without-ssl && \\
+            make -j\$(nproc) && make install && cd .. && \\
+            # Freetype
+            wget https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz && \\
+            tar xf freetype-2.13.2.tar.gz && cd freetype-2.13.2 && \\
+            ./configure --disable-shared --enable-static --with-zlib=no && \\
+            make -j\$(nproc) && make install && cd .. && \\
+            # OpenAL-Soft
+            git clone --depth 1 --branch 1.23.1 https://github.com/kcat/openal-soft.git && \\
+            cd openal-soft && mkdir build && cd build && \\
+            cmake .. -DLIBTYPE=STATIC -DALSOFT_EXAMPLES=OFF -DALSOFT_UTILS=OFF && \\
+            cmake --build . --target install && cd ../.. && \\
+            # Ogg
+            wget https://downloads.xiph.org/releases/ogg/libogg-1.3.5.tar.gz && \\
+            tar xf libogg-1.3.5.tar.gz && cd libogg-1.3.5 && \\
+            ./configure --disable-shared --enable-static && \\
+            make -j\$(nproc) && make install && cd .. && \\
+            # Vorbis
+            wget https://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.gz && \\
+            tar xf libvorbis-1.3.7.tar.gz && cd libvorbis-1.3.7 && \\
+            ./configure --disable-shared --enable-static --with-ogg=/usr/local && \\
+            make -j\$(nproc) && make install && cd .. && \\
+            # GMP
+            wget https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz && \\
+            tar xf gmp-6.3.0.tar.xz && cd gmp-6.3.0 && \\
+            ./configure --disable-shared --enable-static && \\
+            make -j\$(nproc) && make install && cd .. && \\
+            # JSON-C
+            git clone https://github.com/json-c/json-c.git && \\
+            cd json-c && mkdir build && cd build && \\
+            cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \\
+            cmake --build . --target install && cd ../.. && \\
+            # Zstd
+            wget https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5.tar.gz && \\
+            tar xf zstd-1.5.5.tar.gz && cd zstd-1.5.5 && \\
+            make -C build/cmake BUILD_SHARED=OFF ZSTD_BUILD_SHARED=OFF && \\
+            make -C build/cmake install && cd .. && \\
+            # Irrlicht
+            git clone https://github.com/minetest/irrlicht && \\
+            cd irrlicht && mkdir build && cd build && \\
+            cmake .. -DIRRLICHT_BUILD_STATIC=ON -DBUILD_SHARED_LIBS=OFF && \\
+            make install
+
+        # Сборка Luanti со статической линковкой
+        WORKDIR /build/luanti
+        RUN cmake . -B build \\
+            -DCMAKE_BUILD_TYPE=Release \\
+            -DENABLE_GETTEXT=OFF \\
+            -DENABLE_LUAJIT=ON \\
+            -DENABLE_SOUND=ON \\
+            -DENABLE_CURL=ON \\
+            -DENABLE_FREETYPE=ON \\
+            -DBUILD_SERVER=OFF \\
+            -DBUILD_CLIENT=ON \\
+            -DVERSION_EXTRA=RPI5-STATIC \\
+            -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++ -Wl,--whole-archive -lpthread -Wl,--no-whole-archive" \\
+            -DCMAKE_PREFIX_PATH=/usr/local \\
+            -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \\
+            -DBUILD_SHARED_LIBS=OFF
+
+        RUN cmake --build build -j\$(nproc) --target install
+
+        # Проверка статической линковки
+        RUN ldd ./build/bin/luanti | grep -q "not a dynamic executable" && \\
+            echo "Static build successful" || (echo "Dynamic dependencies found"; ldd ./build/bin/luanti; exit 1)
+        EOF
+
+        # Собираем образ и извлекаем бинарник
+        docker buildx build --platform linux/arm64 -t luanti-static-builder --output type=local,dest=./output .
+
+    - name: Verify static executable
+      run: |
+        echo "File type:"
+        file output/luanti/install/bin/luanti
+        echo -e "\nDynamic dependencies:"
+        ! readelf -d output/luanti/install/bin/luanti | grep NEEDED || (echo "Dynamic dependencies found"; exit 1)
+        echo -e "\nStatic build verification passed!"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: luanti-rpi5-static
+        path: output/luanti/install/bin/luanti
