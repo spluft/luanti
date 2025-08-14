@@ -11,7 +11,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: debian:buster
+      # ИЗМЕНЕНИЕ: Используем Debian Bullseye, так как Buster перенесен в архив.
+      image: debian:bullseye
 
     steps:
     - name: Install build dependencies
@@ -156,8 +157,8 @@ jobs:
         git clone https://github.com/minetest/irrlicht.git
         cd irrlicht/source/Irrlicht
         make NDEBUG=1 CROSS_COMPILE=aarch64-linux-gnu- sharedlib=0 -j$(nproc)
-        cp -r ../../include/* ../../install/include/
-        cp ../../lib/Linux/libIrrlicht.a ../../install/lib/
+        cp -r ../../include/* $GITHUB_WORKSPACE/deps/install/include/
+        cp ../../lib/Linux/libIrrlicht.a $GITHUB_WORKSPACE/deps/install/lib/
 
     - name: Build Luanti
       run: |
@@ -179,7 +180,7 @@ jobs:
         cmake --build build -j$(nproc)
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: luanti-rpi5-static
         path: luanti/build/bin/luanti
