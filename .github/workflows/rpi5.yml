@@ -113,9 +113,7 @@ jobs:
           -G Ninja
         
         cmake --build . --target install
-
-        # ... previous steps ...
-
+        
     - name: Build libjpeg-turbo
       run: |
         cd deps
@@ -132,7 +130,23 @@ jobs:
           -DWITH_TURBOJPEG=OFF
         make install
 
-    - name: Build IrrlichtMt (with JPEG support)
+    - name: Build libpng
+      run: |
+        cd deps
+        wget -4 https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz
+        tar xf libpng-1.6.43.tar.gz
+        cd libpng-1.6.43
+        ./configure \
+          --host=aarch64-linux-gnu \
+          --prefix=$DEPS_INSTALL_DIR \
+          --enable-static \
+          --disable-shared \
+          CPPFLAGS="-I$DEPS_INSTALL_DIR/include" \
+          LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
+        make
+        make install
+
+    - name: Build IrrlichtMt (with PNG support)
       run: |
         cd deps
         git clone --depth 1 https://github.com/minetest/irrlicht.git
@@ -147,10 +161,10 @@ jobs:
           -DZLIB_LIBRARY=$DEPS_INSTALL_DIR/lib/libz.a \
           -DZLIB_INCLUDE_DIR=$DEPS_INSTALL_DIR/include \
           -DJPEG_LIBRARY=$DEPS_INSTALL_DIR/lib/libjpeg.a \
-          -DJPEG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include
+          -DJPEG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include \
+          -DPNG_LIBRARY=$DEPS_INSTALL_DIR/lib/libpng.a \
+          -DPNG_PNG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include
         make install
-
-    # ... remaining steps ...
 
     - name: Build Luanti (with explicit ZLIB paths)
       run: |
