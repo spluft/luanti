@@ -130,31 +130,31 @@ jobs:
           -DWITH_TURBOJPEG=OFF
         make install
 
-        - name: Build libpng (fixed)
-          run: |
-            cd deps
-            wget -4 https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz
-            tar xf libpng-1.6.43.tar.gz
-            cd libpng-1.6.43
+      - name: Build libpng (fixed)
+        run: |
+          cd deps
+          wget -4 https://download.sourceforge.net/libpng/libpng-1.6.43.tar.gz
+          tar xf libpng-1.6.43.tar.gz
+          cd libpng-1.6.43
+      
+          # Configure with explicit zlib paths
+          ./configure \
+            --host=aarch64-linux-gnu \
+            --prefix=$DEPS_INSTALL_DIR \
+            --enable-static \
+            --disable-shared \
+            --with-zlib-prefix=$DEPS_INSTALL_DIR \
+            CC="aarch64-linux-gnu-gcc" \
+            CPP="aarch64-linux-gnu-cpp" \
+            CXX="aarch64-linux-gnu-g++" \
+            AR="aarch64-linux-gnu-ar" \
+            RANLIB="aarch64-linux-gnu-ranlib" \
+            STRIP="aarch64-linux-gnu-strip" \
+            CFLAGS="-I$DEPS_INSTALL_DIR/include" \
+            LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
         
-            # Configure with explicit zlib paths
-            ./configure \
-              --host=aarch64-linux-gnu \
-              --prefix=$DEPS_INSTALL_DIR \
-              --enable-static \
-              --disable-shared \
-              --with-zlib-prefix=$DEPS_INSTALL_DIR \
-              CC="aarch64-linux-gnu-gcc" \
-              CPP="aarch64-linux-gnu-cpp" \
-              CXX="aarch64-linux-gnu-g++" \
-              AR="aarch64-linux-gnu-ar" \
-              RANLIB="aarch64-linux-gnu-ranlib" \
-              STRIP="aarch64-linux-gnu-strip" \
-              CFLAGS="-I$DEPS_INSTALL_DIR/include" \
-              LDFLAGS="-L$DEPS_INSTALL_DIR/lib"
-        
-            make
-            make install
+          make
+          make install
 
     - name: Build IrrlichtMt (with PNG support)
       run: |
