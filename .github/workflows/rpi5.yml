@@ -59,15 +59,15 @@ jobs:
         wget -4 https://downloads.raspberrypi.org/raspios_lite_arm64/root.tar.xz
         tar xf root.tar.xz --strip-components=1
         
-        # Download essential libraries
-        wget -4 http://ftp.debian.org/debian/pool/main/libx/libx11/libx11-6_1.7.2-2+deb11u1_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libx/libx11/libx11-dev_1.7.2-2+deb11u1_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libx/libxext/libxext-dev_1.3.3-1.1_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libx/libxxf86vm/libxxf86vm1_1.1.4-1+b2_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libx/libxxf86vm/libxxf86vm-dev_1.1.4-1+b2_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/m/mesa/mesa-common-dev_20.3.5-1_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libg/libglu/libglu1-mesa-dev_9.0.1-1_arm64.deb
-        wget -4 http://ftp.debian.org/debian/pool/main/libdrm/libdrm-dev_2.4.104-1_arm64.deb
+        # Download essential libraries from stable snapshot
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libx11/libx11-6_1.7.2-2%2Bdeb11u1_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libx11/libx11-dev_1.7.2-2%2Bdeb11u1_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxext/libxext-dev_1.3.3-1.1_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxxf86vm/libxxf86vm1_1.1.4-1%2Bb2_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libx/libxxf86vm/libxxf86vm-dev_1.1.4-1%2Bb2_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/m/mesa/mesa-common-dev_20.3.5-1_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libg/libglu/libglu1-mesa-dev_9.0.1-1_arm64.deb
+        wget -4 https://snapshot.debian.org/archive/debian/20230801T084654Z/pool/main/libdrm/libdrm-dev_2.4.104-1_arm64.deb
         
         # Extract packages
         for deb in *.deb; do
@@ -76,7 +76,6 @@ jobs:
         
         # Clean up
         rm *.deb root.tar.xz
-
     - name: Create toolchain file
       run: |
         mkdir -p toolchains
