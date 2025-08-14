@@ -114,13 +114,29 @@ jobs:
         
         cmake --build . --target install
 
-    - name: Build IrrlichtMt (Standalone with ZLIB fix)
+        # ... previous steps ...
+
+    - name: Build libjpeg-turbo
+      run: |
+        cd deps
+        wget -4 https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.0.2.tar.gz -O libjpeg-turbo-3.0.2.tar.gz
+        tar xf libjpeg-turbo-3.0.2.tar.gz
+        cd libjpeg-turbo-3.0.2
+        mkdir build && cd build
+        cmake .. \
+          -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
+          -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
+          -DENABLE_SHARED=OFF \
+          -DENABLE_STATIC=ON \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DWITH_TURBOJPEG=OFF
+        make install
+
+    - name: Build IrrlichtMt (with JPEG support)
       run: |
         cd deps
         git clone --depth 1 https://github.com/minetest/irrlicht.git
         cd irrlicht
-        # Checkout the correct branch/tag
-        git checkout master  # or specific tag like 1.9.0mt10
         mkdir build && cd build
         cmake .. \
           -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
@@ -129,8 +145,12 @@ jobs:
           -DBUILD_SHARED_LIBS=OFF \
           -DIRRLICHT_BUILD_STATIC=ON \
           -DZLIB_LIBRARY=$DEPS_INSTALL_DIR/lib/libz.a \
-          -DZLIB_INCLUDE_DIR=$DEPS_INSTALL_DIR/include
+          -DZLIB_INCLUDE_DIR=$DEPS_INSTALL_DIR/include \
+          -DJPEG_LIBRARY=$DEPS_INSTALL_DIR/lib/libjpeg.a \
+          -DJPEG_INCLUDE_DIR=$DEPS_INSTALL_DIR/include
         make install
+
+    # ... remaining steps ...
 
     - name: Build Luanti (with explicit ZLIB paths)
       run: |
