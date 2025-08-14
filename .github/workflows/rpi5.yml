@@ -117,8 +117,10 @@ jobs:
     - name: Build IrrlichtMt (Standalone with ZLIB fix)
       run: |
         cd deps
-        git clone --depth 1 --branch mt https://github.com/minetest/irrlicht.git
+        git clone --depth 1 https://github.com/minetest/irrlicht.git
         cd irrlicht
+        # Checkout the correct branch/tag
+        git checkout master  # or specific tag like 1.9.0mt10
         mkdir build && cd build
         cmake .. \
           -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE \
