@@ -1,0 +1,29 @@
+name: Build Luanti for RPi5 (ARM) NATIVE BETA
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm  # ARM-специфичный раннер:cite[4]
+    timeout-minutes: 90
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Установка rustup
+      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+    - name: Сборка зависимостей
+      run: |
+        # Скрипты из PR #15980 для zlib, LuaJIT и др.
+        ./scripts/build_deps_arm.sh
+
+    - name: Сборка Luanti
+      run: |
+        cmake -B build -DCMAKE_EXE_LINKER_FLAGS="-static" 
+        cmake --build build --target install
+
+    - name: Проверка
+      run: |
+        file build/bin/luanti | grep "statically linked"
