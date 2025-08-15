@@ -1,10 +1,6 @@
 name: Build Luanti for Raspberry Pi 5 (Static)
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -14,7 +10,6 @@ jobs:
 
     env:
       DEPS_INSTALL_DIR: ${{ github.workspace }}/deps/install
-      MAKE_JOBS: ${{ github.env.CI && '4' || '$(nproc)' }}  # Ограничение потоков в CI
 
     steps:
     - name: Install build dependencies
@@ -34,8 +29,7 @@ jobs:
           libxxf86vm-dev \
           libgl1-mesa-dev \
           libglu1-mesa-dev \
-          libsdl2-dev \
-          m4  # Добавлено для сборки GMP
+          libsdl2-dev
 
         # Install modern CMake
         wget -O cmake-linux.sh https://github.com/Kitware/CMake/releases/download/v3.27.7/cmake-3.27.7-linux-$(uname -m).sh
@@ -54,20 +48,18 @@ jobs:
     - name: Build zlib
       run: |
         cd deps
-        rm -rf zlib-1.3.1
         wget -q https://www.zlib.net/zlib-1.3.1.tar.gz
         tar xf zlib-1.3.1.tar.gz
         cd zlib-1.3.1
         
         ./configure --static --prefix=$DEPS_INSTALL_DIR
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
     - name: Build SQLite3
       run: |
         cd deps
-        rm -rf sqlite-autoconf-3430200
         wget -q https://www.sqlite.org/2023/sqlite-autoconf-3430200.tar.gz
         tar xf sqlite-autoconf-3430200.tar.gz
         cd sqlite-autoconf-3430200
@@ -77,13 +69,12 @@ jobs:
           --enable-static \
           --prefix=$DEPS_INSTALL_DIR
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
     - name: Build LuaJIT
       run: |
         cd deps
-        rm -rf luajit
         git clone https://luajit.org/git/luajit.git
         cd luajit
         git checkout v2.1
@@ -93,12 +84,11 @@ jobs:
           TARGET_LDFLAGS="-static" \
           BUILDMODE="static" \
           PREFIX=$DEPS_INSTALL_DIR \
-          -j$MAKE_JOBS install
+          -j$(nproc) install
 
     - name: Build cURL
       run: |
         cd deps
-        rm -rf curl-8.4.0
         wget -q https://curl.se/download/curl-8.4.0.tar.gz
         tar xf curl-8.4.0.tar.gz
         cd curl-8.4.0
@@ -110,13 +100,12 @@ jobs:
           --with-zlib=$DEPS_INSTALL_DIR \
           --without-ssl
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
     - name: Build Freetype
       run: |
         cd deps
-        rm -rf freetype-2.13.2
         wget -q https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
         tar xf freetype-2.13.2.tar.gz
         cd freetype-2.13.2
@@ -127,13 +116,15 @@ jobs:
           --prefix=$DEPS_INSTALL_DIR \
           --with-zlib=no
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
-    - name: Build OpenAL-Soft
+    - name: Build OpenAL-Soft (fixed)
       run: |
         cd deps
+        # Remove existing directory to avoid conflicts
         rm -rf openal-soft
+        
         git clone https://github.com/kcat/openal-soft.git
         cd openal-soft
         git checkout 1.23.1
@@ -141,6 +132,7 @@ jobs:
         # Patch to remove problematic generator expressions
         sed -i 's/\$<BUILD_LOCAL_INTERFACE:alsoft::fmt>//g' CMakeLists.txt
         
+        # Create build directory (remove first if exists)
         rm -rf build
         mkdir build
         cd build
@@ -152,12 +144,11 @@ jobs:
           -DALSOFT_UTILS=OFF \
           -DALSOFT_NO_CONFIG_UTIL=ON
         
-        cmake --build . -j$MAKE_JOBS --target install
+        cmake --build . -j$(nproc) --target install
 
     - name: Build Ogg
       run: |
         cd deps
-        rm -rf libogg-1.3.5
         wget -q https://downloads.xiph.org/releases/ogg/libogg-1.3.5.tar.gz
         tar xf libogg-1.3.5.tar.gz
         cd libogg-1.3.5
@@ -167,13 +158,12 @@ jobs:
           --enable-static \
           --prefix=$DEPS_INSTALL_DIR
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
     - name: Build libvorbis
       run: |
         cd deps
-        rm -rf libvorbis-1.3.7
         wget -q https://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.gz
         tar xf libvorbis-1.3.7.tar.gz
         cd libvorbis-1.3.7
@@ -184,25 +174,22 @@ jobs:
           --prefix=$DEPS_INSTALL_DIR \
           --with-ogg=$DEPS_INSTALL_DIR
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
-    - name: Build GMP (fixed)
+    - name: Build GMP
       run: |
         cd deps
-        rm -rf gmp-6.3.0
         wget -q https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
         tar xf gmp-6.3.0.tar.xz
         cd gmp-6.3.0
         
-        # Конфигурация с отключенной сборкой вложенных функций (для ARM)
         ./configure \
           --disable-shared \
           --enable-static \
-          --prefix=$DEPS_INSTALL_DIR \
-          --disable-assembly  # Ключевое исправление
+          --prefix=$DEPS_INSTALL_DIR
         
-        make -j$MAKE_JOBS
+        make -j$(nproc)
         make install
 
     - name: Build json-c
@@ -219,12 +206,11 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$DEPS_INSTALL_DIR \
           -DBUILD_SHARED_LIBS=OFF
         
-        cmake --build . -j$MAKE_JOBS --target install
+        cmake --build . -j$(nproc) --target install
 
     - name: Build zstd
       run: |
         cd deps
-        rm -rf zstd-1.5.5
         wget -q https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5.tar.gz
         tar xf zstd-1.5.5.tar.gz
         cd zstd-1.5.5
@@ -253,7 +239,7 @@ jobs:
           -DIRRLICHT_BUILD_STATIC=ON \
           -DCMAKE_BUILD_TYPE=Release
         
-        make -j$MAKE_JOBS install
+        make -j$(nproc) install
 
     - name: Build Luanti
       run: |
@@ -272,7 +258,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=./install \
           -DCMAKE_BUILD_TYPE=Release
         
-        cmake --build build -j$MAKE_JOBS --target install
+        cmake --build build -j$(nproc) --target install
 
     - name: Verify static executable
       run: |
