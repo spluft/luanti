@@ -1,10 +1,6 @@
 name: Build Luanti for Raspberry Pi 5 (Static)
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
   workflow_dispatch:
 
 jobs:
