@@ -1,4 +1,4 @@
-name: Build Luanti for Raspberry Pi 5
+name: Build Luanti for Raspberry Pi 5 (Fixed)
 
 on:
   push:
@@ -37,34 +37,15 @@ jobs:
           pkg-config \
           git
     
-    - name: Install ARM64 dependencies
+    - name: Configure multiarch sources
       run: |
-        # Настройка dpkg для мультиархитектуры
-        sudo dpkg --add-architecture arm64
-        sudo apt-get update
+        # Резервное копирование оригинального sources.list
+        sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
         
-        # Установка ARM64 библиотек
-        sudo apt-get install -y \
-          libsqlite3-dev:arm64 \
-          libcurl4-openssl-dev:arm64 \
-          zlib1g-dev:arm64 \
-          libgmp-dev:arm64 \
-          libjsoncpp-dev:arm64 \
-          libzstd-dev:arm64 \
-          libncurses-dev:arm64 \
-          libpng-dev:arm64 \
-          libjpeg-dev:arm64 \
-          libfreetype6-dev:arm64 \
-          libogg-dev:arm64 \
-          libvorbis-dev:arm64 \
-          libopenal-dev:arm64 \
-          libgl1-mesa-dev:arm64 \
-          libgles2-mesa-dev:arm64 \
-          libegl1-mesa-dev:arm64
-    
-    - name: Build LuaJIT for ARM64
-      run: |
-        git clone https://github.com/LuaJIT/LuaJIT.git luajit
-        cd luajit
-        make HOST_CC="gcc -m64" CROSS=aarch64-linux-gnu- TARGET_SYS=Linux amalg -j$(nproc)
-     
+        # Настройка архитектурно-специфичных источников
+        sudo bash -c 'cat > /etc/apt/sources.list << EOF
+# AMD64 архитектура - основные репозитории Ubuntu
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble-backports main restricted universe multiverse
+deb [arch=amd64] http://security.ubuntu.com/ubuntu/ noble-security main restricte
